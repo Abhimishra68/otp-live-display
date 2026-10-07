@@ -191,6 +191,38 @@
   }
 
 
+  /* Notification sound toggle button */
+  .sound-toggle {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #ffffff;
+    transition: background 0.2s, transform 0.15s, opacity 0.2s, box-shadow 0.2s;
+    padding: 0;
+    z-index: 2;
+  }
+  .sound-toggle:hover {
+    background: rgba(255, 255, 255, 0.24);
+    transform: scale(1.06);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  .sound-toggle:active {
+    transform: scale(0.95);
+  }
+  .sound-toggle.muted {
+    opacity: 0.55;
+    background: rgba(0, 0, 0, 0.18);
+  }
+
   @media (max-width: 400px) {
     .digit { width: 44px; height: 56px; font-size: 26px; }
     .otp-row { gap: 7px; }
@@ -202,6 +234,13 @@
   <div class="blob b2"></div>
 
   <div class="card">
+    <button class="sound-toggle" id="soundToggle" type="button" title="Notification chime is active (click to test / mute)" aria-label="Toggle notification sound">
+      <svg id="soundIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+      </svg>
+    </button>
+
     <div class="icon">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -248,8 +287,115 @@
   var statusText = document.getElementById("statusText");
   var verifyBtn = document.getElementById("verifyBtn");
   var clearBtn = document.getElementById("clearBtn");
+  var soundToggle = document.getElementById("soundToggle");
+  var soundIcon = document.getElementById("soundIcon");
 
   var current = ""; // the code so far
+  var lastPlayedOtp = "";
+  var soundEnabled = true;
+  var audioCtx = null;
+
+  var bellOnSvg = '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path>';
+  var bellOffSvg = '<path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18.63 13A17.89 17.89 0 0 1 18 8"></path><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"></path><path d="M18 8a6 6 0 0 0-9.33-5"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+
+  // ---- Audio notification chime -------------------------------------------
+  function getAudioContext() {
+    try {
+      if (!audioCtx) {
+        var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume().catch(function () {});
+      }
+    } catch (_) {}
+    return audioCtx;
+  }
+
+  function unlockAudio() {
+    var ctx = getAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(function () {});
+    }
+  }
+
+  ["click", "touchstart", "keydown"].forEach(function (ev) {
+    window.addEventListener(ev, unlockAudio, { once: true, passive: true });
+  });
+
+  function playNotificationChime() {
+    if (!soundEnabled) return;
+    try {
+      var ctx = getAudioContext();
+      if (!ctx) return;
+      var now = ctx.currentTime;
+
+      // Harmonic E-major arpeggio: E5 (659.25Hz), G#5 (830.61Hz), B5 (987.77Hz)
+      var notes = [
+        { f: 659.25, t: 0.00, dur: 0.22, vol: 0.35 },
+        { f: 830.61, t: 0.08, dur: 0.24, vol: 0.38 },
+        { f: 987.77, t: 0.16, dur: 0.45, vol: 0.45 }
+      ];
+
+      notes.forEach(function (n) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(n.f, now + n.t);
+
+        gain.gain.setValueAtTime(0.0001, now + n.t);
+        gain.gain.exponentialRampToValueAtTime(n.vol, now + n.t + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + n.t + n.dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now + n.t);
+        osc.stop(now + n.t + n.dur);
+
+        // Soft bell overtone (octave)
+        var osc2 = ctx.createOscillator();
+        var gain2 = ctx.createGain();
+        osc2.type = "triangle";
+        osc2.frequency.setValueAtTime(n.f * 2, now + n.t);
+
+        gain2.gain.setValueAtTime(0.0001, now + n.t);
+        gain2.gain.exponentialRampToValueAtTime(n.vol * 0.22, now + n.t + 0.01);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, now + n.t + n.dur * 0.7);
+
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+
+        osc2.start(now + n.t);
+        osc2.stop(now + n.t + n.dur * 0.7);
+      });
+
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate([120, 80, 120]);
+      }
+    } catch (e) {
+      console.warn("Chime error:", e);
+    }
+  }
+
+  if (soundToggle) {
+    soundToggle.addEventListener("click", function (e) {
+      e.stopPropagation();
+      unlockAudio();
+      soundEnabled = !soundEnabled;
+      soundToggle.classList.toggle("muted", !soundEnabled);
+      soundIcon.innerHTML = soundEnabled ? bellOnSvg : bellOffSvg;
+      soundToggle.title = soundEnabled
+        ? "Notification sound is ON (click to mute)"
+        : "Notification sound is MUTED (click to enable)";
+      if (soundEnabled) {
+        playNotificationChime();
+      }
+    });
+  }
 
   // ---- Rendering ----------------------------------------------------------
   function render() {
@@ -285,14 +431,20 @@
   }
 
   // ---- Public: set the OTP dynamically ------------------------------------
-  // Sanitizes to digits and fills the boxes with the pop animation.
+  // Sanitizes to digits, plays notification chime, and fills the boxes.
   function setOtp(value) {
     var clean = String(value == null ? "" : value).replace(/\D/g, "").slice(0, CODE_LENGTH);
+    var isNew = clean.length > 0 && clean !== lastPlayedOtp;
     current = clean;
     hiddenInput.value = clean;
     render();
     if (clean.length === CODE_LENGTH) {
       flashComplete();
+    }
+    if (isNew) {
+      lastPlayedOtp = clean;
+      playNotificationChime();
+      document.title = "🔔 [" + clean + "] OTP Received!";
     }
   }
 
@@ -325,6 +477,8 @@
   });
 
   clearBtn.addEventListener("click", function () {
+    lastPlayedOtp = "";
+    document.title = "OTP Verification";
     setOtp("");
     focusInput();
   });
