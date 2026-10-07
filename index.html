@@ -421,36 +421,25 @@
     }
   });
 
-  // 3) Auto-sync with connected phone via direct USB/Local server (http://localhost:8080/otp)
-  var LOCAL_DEVICE_URL = "http://localhost:8080/otp";
-  var LOCAL_SSE_URL = "http://localhost:8080/events";
-  var pollInterval = 1500;
+  // 3) Auto-sync with connected phone via direct USB/Local server (http://localhost:8765/otp or 8080/otp)
+  var candidatePorts = [8765, 8088, 8080];
+  var pollInterval = 1200;
 
   function checkLocalPhone() {
-    fetch(LOCAL_DEVICE_URL, { cache: "no-store" })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) {
-        if (j) {
-          if (j.otp && String(j.otp) !== current) {
+    candidatePorts.forEach(function (port) {
+      fetch("http://localhost:" + port + "/otp", { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (j && j.otp && String(j.otp) !== current) {
             setOtp(j.otp);
           }
-        }
-      })
-      .catch(function () {});
+        })
+        .catch(function () {});
+    });
   }
 
   setInterval(checkLocalPhone, pollInterval);
   checkLocalPhone();
-
-  try {
-    var es = new EventSource(LOCAL_SSE_URL);
-    es.onmessage = function (e) {
-      try {
-        var data = JSON.parse(e.data);
-        if (data && data.otp) setOtp(data.otp);
-      } catch (_) {}
-    };
-  } catch (_) {}
 
   // ---- WebRTC receiver (Google STUN) -------------------------------------
   // This page answers an offer created by the Flutter app and receives the
