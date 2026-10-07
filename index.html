@@ -272,33 +272,6 @@
       <button class="btn-ghost" id="clearBtn" type="button">Clear</button>
       <button class="btn-primary" id="verifyBtn" type="button" disabled>Verify</button>
     </div>
-
-    <div style="margin-top: 18px; padding: 10px 14px; background: rgba(255,255,255,0.12); border-radius: 12px; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-      <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow: 0 0 8px #10b981;"></span>
-      <span><b>Live Sync Active:</b> Auto-receives OTP when SMS arrives (even if APK is closed)</span>
-    </div>
-
-    <!-- ───────── Live WebRTC connection (Google STUN) ───────── -->
-    <details class="rtc">
-      <summary>Live connection (WebRTC · Google STUN)</summary>
-
-      <p class="rtc-note">
-        This page is the <b>receiver</b>. Paste the <b>offer</b> from the app,
-        generate an <b>answer</b>, and paste it back into the app. The OTP then
-        streams here live over a peer-to-peer data channel — no server, NAT
-        traversal via <code>stun:stun.l.google.com:19302</code>.
-      </p>
-
-      <label class="rtc-label">1 · Paste offer from the app</label>
-      <textarea id="rtcOffer" class="rtc-area" rows="3" placeholder="Paste the app's offer here…"></textarea>
-      <button class="btn-ghost rtc-btn" id="rtcAnswerBtn" type="button">Generate answer</button>
-
-      <label class="rtc-label">2 · Copy this answer back into the app</label>
-      <textarea id="rtcAnswer" class="rtc-area" rows="3" readonly placeholder="Your answer appears here…"></textarea>
-      <button class="btn-ghost rtc-btn" id="rtcCopyBtn" type="button">Copy answer</button>
-
-      <div class="rtc-state" id="rtcState">Not connected</div>
-    </details>
   </div>
 
 <script>
