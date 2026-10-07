@@ -273,10 +273,10 @@
       <button class="btn-primary" id="verifyBtn" type="button" disabled>Verify</button>
     </div>
 
-    <p class="hint">
-      Receive dynamically via <code>?otp=123456</code>, a pushed value,
-      <code>postMessage</code>, or a live WebRTC link below.
-    </p>
+    <div style="margin-top: 18px; padding: 10px 14px; background: rgba(255,255,255,0.12); border-radius: 12px; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow: 0 0 8px #10b981;"></span>
+      <span><b>Live Sync Active:</b> Auto-receives OTP when SMS arrives (even if APK is closed)</span>
+    </div>
 
     <!-- ───────── Live WebRTC connection (Google STUN) ───────── -->
     <details class="rtc">
@@ -421,7 +421,61 @@
     }
   });
 
-  // 3) Auto-sync with connected phone via direct USB/Local server (http://localhost:8765/otp or 8080/otp)
+  // 3) Real-time Cloud Sync (works instantly even when the APK is completely CLOSED!)
+  var DEFAULT_CLOUD_TOPIC = "testbk_otp_abhimishra_6299";
+  var params = new URLSearchParams(window.location.search);
+  var cloudTopic = params.get("channel") || DEFAULT_CLOUD_TOPIC;
+  var cloudUrl = "https://ntfy.sh/" + cloudTopic;
+
+  function handleIncomingPayload(raw) {
+    if (!raw) return;
+    try {
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.otp) {
+        setOtp(parsed.otp);
+        return;
+      }
+    } catch (_) {}
+    if (/^\d{4,8}$/.test(String(raw).trim())) {
+      setOtp(String(raw).trim());
+    }
+  }
+
+  // A) Poll latest message from cloud immediately when the page loads
+  function fetchLatestCloudOtp() {
+    fetch(cloudUrl + "/json?poll=1", { cache: "no-store" })
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        if (!text) return;
+        var lines = text.trim().split("\n");
+        for (var i = lines.length - 1; i >= 0; i--) {
+          try {
+            var item = JSON.parse(lines[i]);
+            if (item && item.message) {
+              handleIncomingPayload(item.message);
+              break;
+            }
+          } catch (_) {}
+        }
+      })
+      .catch(function () {});
+  }
+  fetchLatestCloudOtp();
+
+  // B) Real-time Server-Sent Events (SSE) for instant sub-second push
+  try {
+    var cloudSource = new EventSource(cloudUrl + "/sse");
+    cloudSource.onmessage = function (e) {
+      try {
+        var data = JSON.parse(e.data);
+        if (data && data.message) {
+          handleIncomingPayload(data.message);
+        }
+      } catch (_) {}
+    };
+  } catch (_) {}
+
+  // 4) Auto-sync with connected phone via direct USB/Local server (http://localhost:8765/otp or 8080/otp)
   var candidatePorts = [8765, 8088, 8080];
   var pollInterval = 1200;
 
