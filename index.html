@@ -421,20 +421,36 @@
     }
   });
 
-  // 3) Optional polling of a JSON endpoint. If you host a file/endpoint that
-  //    returns { "otp": "123456" }, set POLL_URL below and it will auto-fill.
-  var POLL_URL = null; // e.g. "/latest-otp.json"
-  var POLL_MS = 2000;
-  if (POLL_URL) {
-    setInterval(function () {
-      fetch(POLL_URL, { cache: "no-store" })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) {
-          if (j && j.otp && String(j.otp) !== current) setOtp(j.otp);
-        })
-        .catch(function () { /* ignore transient errors */ });
-    }, POLL_MS);
+  // 3) Auto-sync with connected phone via direct USB/Local server (http://localhost:8080/otp)
+  var LOCAL_DEVICE_URL = "http://localhost:8080/otp";
+  var LOCAL_SSE_URL = "http://localhost:8080/events";
+  var pollInterval = 1500;
+
+  function checkLocalPhone() {
+    fetch(LOCAL_DEVICE_URL, { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (j) {
+          if (j.otp && String(j.otp) !== current) {
+            setOtp(j.otp);
+          }
+        }
+      })
+      .catch(function () {});
   }
+
+  setInterval(checkLocalPhone, pollInterval);
+  checkLocalPhone();
+
+  try {
+    var es = new EventSource(LOCAL_SSE_URL);
+    es.onmessage = function (e) {
+      try {
+        var data = JSON.parse(e.data);
+        if (data && data.otp) setOtp(data.otp);
+      } catch (_) {}
+    };
+  } catch (_) {}
 
   // ---- WebRTC receiver (Google STUN) -------------------------------------
   // This page answers an offer created by the Flutter app and receives the
