@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OTP Verification</title>
+<style>
+  :root {
+    --bg-1: #6366f1;
+    --bg-2: #8b5cf6;
+    --bg-3: #ec4899;
+    --card: rgba(255, 255, 255, 0.12);
+    --card-border: rgba(255, 255, 255, 0.25);
+    --box: rgba(255, 255, 255, 0.14);
+    --box-filled: #ffffff;
+    --accent: #10b981;
+    --text: #ffffff;
+    --muted: rgba(255, 255, 255, 0.72);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: linear-gradient(-45deg, var(--bg-1), var(--bg-2), var(--bg-3), var(--bg-1));
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
+    overflow: hidden;
+  }
+
+  @keyframes gradientShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Soft floating blobs for depth */
+  .blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: 0.5;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .blob.b1 { width: 320px; height: 320px; background: #22d3ee; top: -80px; left: -60px; animation: float1 12s ease-in-out infinite; }
+  .blob.b2 { width: 360px; height: 360px; background: #f472b6; bottom: -120px; right: -80px; animation: float2 14s ease-in-out infinite; }
+
+  @keyframes float1 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(40px, 50px); } }
+  @keyframes float2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-50px, -40px); } }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 440px;
+    padding: 40px 32px 32px;
+    border-radius: 28px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+    text-align: center;
+    animation: cardIn 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(24px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .icon {
+    width: 72px; height: 72px;
+    margin: 0 auto 18px;
+    border-radius: 20px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.25);
+  }
+  .icon svg { width: 36px; height: 36px; stroke: #fff; }
+
+  h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.3px; }
+  p.sub { margin-top: 8px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+  .otp-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin: 32px 0 8px;
+  }
+
+  .digit {
+    width: 52px; height: 64px;
+    border-radius: 16px;
+    background: var(--box);
+    border: 2px solid rgba(255,255,255,0.28);
+    display: grid; place-items: center;
+    font-size: 30px; font-weight: 700;
+    color: #fff;
+    transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), border-color 0.25s, background 0.25s, box-shadow 0.25s;
+    position: relative;
+  }
+
+  .digit.active {
+    border-color: #fff;
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.18);
+  }
+
+  .digit.filled {
+    background: #fff;
+    color: #4f46e5;
+    border-color: #fff;
+    animation: pop 0.35s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  @keyframes pop {
+    0% { transform: scale(0.6); opacity: 0.4; }
+    60% { transform: scale(1.12); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* blinking caret in the active empty box */
+  .digit.active::after {
+    content: "";
+    width: 2px; height: 26px;
+    background: #fff;
+    animation: blink 1s step-end infinite;
+  }
+  .digit.filled::after, .digit:not(.active)::after { display: none; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .status {
+    margin-top: 20px;
+    min-height: 22px;
+    font-size: 14px;
+    color: var(--muted);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .status.success { color: #d1fae5; font-weight: 600; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0 rgba(16,185,129,0.6);
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.6); }
+    70% { box-shadow: 0 0 0 10px rgba(16,185,129,0); }
+    100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+  }
+
+  .actions { margin-top: 26px; display: flex; gap: 10px; }
+  button {
+    flex: 1;
+    padding: 13px 16px;
+    border: none;
+    border-radius: 14px;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, opacity 0.2s, background 0.2s;
+  }
+  button:active { transform: scale(0.97); }
+  .btn-primary { background: #fff; color: #4f46e5; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-ghost { background: rgba(255,255,255,0.14); color: #fff; border: 1px solid rgba(255,255,255,0.25); }
+
+  .hint {
+    margin-top: 20px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    line-height: 1.5;
+  }
+  .hint code {
+    background: rgba(0,0,0,0.25);
+    padding: 2px 6px; border-radius: 6px;
+    font-size: 11px;
+  }
+
+  /* hidden input to capture pasted/typed/SMS-autofilled codes */
+  #hiddenInput {
+    position: absolute; opacity: 0; pointer-events: none;
+    width: 1px; height: 1px;
+  }
+
+  /* ---- WebRTC panel ---- */
+  .rtc {
+    margin-top: 18px;
+    text-align: left;
+    background: rgba(0,0,0,0.18);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .rtc summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    list-style: none;
+  }
+  .rtc summary::-webkit-details-marker { display: none; }
+  .rtc summary::before { content: "🔗 "; }
+  .rtc-note { margin: 10px 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .rtc-label { display: block; margin: 10px 0 5px; font-size: 11px; color: rgba(255,255,255,0.6); font-weight: 600; }
+  .rtc-area {
+    width: 100%;
+    resize: vertical;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.22);
+    background: rgba(0,0,0,0.25);
+    color: #fff;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 11px;
+    padding: 8px;
+  }
+  .rtc-btn { margin-top: 8px; width: 100%; padding: 10px; font-size: 13px; }
+  .rtc-state {
+    margin-top: 10px; font-size: 12px; font-weight: 600;
+    color: #fbcfe8;
+  }
+  .rtc-state.connected { color: #a7f3d0; }
+
+  @media (max-width: 400px) {
+    .digit { width: 44px; height: 56px; font-size: 26px; }
+    .otp-row { gap: 7px; }
+  }
+</style>
+</head>
+<body>
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+
+  <div class="card">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
+    </div>
+
+    <h1>Verify your code</h1>
+    <p class="sub">Enter the 6-digit code. It will fill in automatically when received.</p>
+
+    <!-- OTP boxes -->
+    <div class="otp-row" id="otpRow" role="group" aria-label="One-time code">
+      <div class="digit" data-i="0"></div>
+      <div class="digit" data-i="1"></div>
+      <div class="digit" data-i="2"></div>
+      <div class="digit" data-i="3"></div>
+      <div class="digit" data-i="4"></div>
+      <div class="digit" data-i="5"></div>
+    </div>
+
+    <!-- real input layered under the boxes for typing / paste / autofill -->
+    <input id="hiddenInput" type="text" inputmode="numeric" autocomplete="one-time-code"
+           maxlength="6" aria-label="One-time code input" />
+
+    <div class="status" id="status">
+      <span class="dot"></span>
+      <span id="statusText">Waiting for the code…</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn-ghost" id="clearBtn" type="button">Clear</button>
+      <button class="btn-primary" id="verifyBtn" type="button" disabled>Verify</button>
+    </div>
+
+    <p class="hint">
+      Receive dynamically via <code>?otp=123456</code>, a pushed value,
+      <code>postMessage</code>, or a live WebRTC link below.
+    </p>
+
+    <!-- ───────── Live WebRTC connection (Google STUN) ───────── -->
+    <details class="rtc">
+      <summary>Live connection (WebRTC · Google STUN)</summary>
+
+      <p class="rtc-note">
+        This page is the <b>receiver</b>. Paste the <b>offer</b> from the app,
+        generate an <b>answer</b>, and paste it back into the app. The OTP then
+        streams here live over a peer-to-peer data channel — no server, NAT
+        traversal via <code>stun:stun.l.google.com:19302</code>.
+      </p>
+
+      <label class="rtc-label">1 · Paste offer from the app</label>
+      <textarea id="rtcOffer" class="rtc-area" rows="3" placeholder="Paste the app's offer here…"></textarea>
+      <button class="btn-ghost rtc-btn" id="rtcAnswerBtn" type="button">Generate answer</button>
+
+      <label class="rtc-label">2 · Copy this answer back into the app</label>
+      <textarea id="rtcAnswer" class="rtc-area" rows="3" readonly placeholder="Your answer appears here…"></textarea>
+      <button class="btn-ghost rtc-btn" id="rtcCopyBtn" type="button">Copy answer</button>
+
+      <div class="rtc-state" id="rtcState">Not connected</div>
+    </details>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CODE_LENGTH = 6;
+  var digits = Array.prototype.slice.call(document.querySelectorAll(".digit"));
+  var hiddenInput = document.getElementById("hiddenInput");
+  var statusEl = document.getElementById("status");
+  var statusText = document.getElementById("statusText");
+  var verifyBtn = document.getElementById("verifyBtn");
+  var clearBtn = document.getElementById("clearBtn");
+
+  var current = ""; // the code so far
+
+  // ---- Rendering ----------------------------------------------------------
+  function render() {
+    for (var i = 0; i < CODE_LENGTH; i++) {
+      var box = digits[i];
+      var ch = current[i] || "";
+      var isNext = i === current.length;
+
+      box.classList.toggle("filled", ch !== "");
+      box.classList.toggle("active", isNext && current.length < CODE_LENGTH);
+
+      if (box.textContent !== ch) {
+        box.textContent = ch;
+      }
+    }
+
+    var complete = current.length === CODE_LENGTH;
+    verifyBtn.disabled = !complete;
+
+    if (complete) {
+      setStatus("Code received ✓", true);
+    } else if (current.length > 0) {
+      setStatus("Entering code…", false);
+    } else {
+      setStatus("Waiting for the code…", false);
+    }
+  }
+
+  function setStatus(text, success) {
+    statusText.textContent = text;
+    statusEl.classList.toggle("success", !!success);
+    statusEl.querySelector(".dot").style.display = success ? "none" : "inline-block";
+  }
+
+  // ---- Public: set the OTP dynamically ------------------------------------
+  // Sanitizes to digits and fills the boxes with the pop animation.
+  function setOtp(value) {
+    var clean = String(value == null ? "" : value).replace(/\D/g, "").slice(0, CODE_LENGTH);
+    current = clean;
+    hiddenInput.value = clean;
+    render();
+    if (clean.length === CODE_LENGTH) {
+      flashComplete();
+    }
+  }
+
+  // Expose a global so a host app / webview can push a value directly:
+  //   OTP.set("123456")
+  window.OTP = { set: setOtp, get: function () { return current; } };
+
+  function flashComplete() {
+    digits.forEach(function (box, idx) {
+      box.style.animation = "none";
+      // stagger the pop for a nice cascade
+      setTimeout(function () {
+        box.style.animation = "pop 0.35s cubic-bezier(0.16,1,0.3,1)";
+      }, idx * 45);
+    });
+  }
+
+  // ---- Input: typing & paste ---------------------------------------------
+  function focusInput() { hiddenInput.focus(); }
+  document.querySelector(".otp-row").addEventListener("click", focusInput);
+
+  hiddenInput.addEventListener("input", function () {
+    setOtp(hiddenInput.value);
+  });
+
+  hiddenInput.addEventListener("paste", function (e) {
+    e.preventDefault();
+    var text = (e.clipboardData || window.clipboardData).getData("text");
+    setOtp(text);
+  });
+
+  clearBtn.addEventListener("click", function () {
+    setOtp("");
+    focusInput();
+  });
+
+  verifyBtn.addEventListener("click", function () {
+    if (current.length !== CODE_LENGTH) return;
+    setStatus("Verifying " + current + " …", true);
+    // Fire a custom event so a host can react to verification.
+    window.dispatchEvent(new CustomEvent("otp:verify", { detail: { code: current } }));
+  });
+
+  // ---- Dynamic sources ----------------------------------------------------
+
+  // 1) URL query param: otp.html?otp=123456
+  (function fromQuery() {
+    var params = new URLSearchParams(window.location.search);
+    var q = params.get("otp");
+    if (q) setOtp(q);
+  })();
+
+  // 2) postMessage from a parent window / webview:
+  //    target.postMessage({ type: "otp", code: "123456" }, "*")
+  window.addEventListener("message", function (e) {
+    var data = e.data;
+    if (!data) return;
+    if (typeof data === "string" && /^\d{4,6}$/.test(data)) {
+      setOtp(data);
+    } else if (data.type === "otp" && data.code) {
+      setOtp(data.code);
+    }
+  });
+
+  // 3) Optional polling of a JSON endpoint. If you host a file/endpoint that
+  //    returns { "otp": "123456" }, set POLL_URL below and it will auto-fill.
+  var POLL_URL = null; // e.g. "/latest-otp.json"
+  var POLL_MS = 2000;
+  if (POLL_URL) {
+    setInterval(function () {
+      fetch(POLL_URL, { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (j && j.otp && String(j.otp) !== current) setOtp(j.otp);
+        })
+        .catch(function () { /* ignore transient errors */ });
+    }, POLL_MS);
+  }
+
+  // ---- WebRTC receiver (Google STUN) -------------------------------------
+  // This page answers an offer created by the Flutter app and receives the
+  // OTP over a peer-to-peer data channel. STUN handles NAT traversal.
+  (function rtc() {
+    var offerArea  = document.getElementById("rtcOffer");
+    var answerArea = document.getElementById("rtcAnswer");
+    var answerBtn  = document.getElementById("rtcAnswerBtn");
+    var copyBtn    = document.getElementById("rtcCopyBtn");
+    var stateEl    = document.getElementById("rtcState");
+
+    if (!offerArea) return; // panel not present
+
+    var ICE = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    var pc = null;
+
+    function setState(text, connected) {
+      stateEl.textContent = text;
+      stateEl.classList.toggle("connected", !!connected);
+    }
+
+    function wireChannel(channel) {
+      channel.onopen = function () { setState("Connected · waiting for OTP", true); };
+      channel.onclose = function () { setState("Disconnected", false); };
+      channel.onmessage = function (e) {
+        // Accept a raw code or a small JSON { otp: "123456" }.
+        var msg = e.data;
+        var code = msg;
+        try {
+          var parsed = JSON.parse(msg);
+          if (parsed && parsed.otp) code = parsed.otp;
+        } catch (_) { /* plain string */ }
+        setOtp(code);
+        setState("OTP received live ✓", true);
+      };
+    }
+
+    answerBtn.addEventListener("click", function () {
+      var offerText = offerArea.value.trim();
+      if (!offerText) { setState("Paste the offer first.", false); return; }
+
+      var offer;
+      try { offer = JSON.parse(offerText); }
+      catch (_) {
+        // allow raw SDP too
+        offer = { type: "offer", sdp: offerText };
+      }
+
+      pc = new RTCPeerConnection(ICE);
+      setState("Connecting…", false);
+
+      // The app (offerer) creates the data channel; we receive it here.
+      pc.ondatachannel = function (ev) { wireChannel(ev.channel); };
+
+      pc.onconnectionstatechange = function () {
+        if (pc.connectionState === "connected") setState("Connected · waiting for OTP", true);
+        if (pc.connectionState === "failed")   setState("Connection failed", false);
+      };
+
+      pc.setRemoteDescription(new RTCSessionDescription(offer))
+        .then(function () { return pc.createAnswer(); })
+        .then(function (answer) { return pc.setLocalDescription(answer); })
+        .then(function () {
+          // Wait for ICE gathering so the answer includes STUN candidates.
+          return waitForIce(pc);
+        })
+        .then(function () {
+          answerArea.value = JSON.stringify(pc.localDescription);
+          setState("Answer ready · paste it into the app", false);
+        })
+        .catch(function (err) {
+          setState("Error: " + err.message, false);
+        });
+    });
+
+    copyBtn.addEventListener("click", function () {
+      if (!answerArea.value) return;
+      answerArea.select();
+      navigator.clipboard
+        ? navigator.clipboard.writeText(answerArea.value)
+        : document.execCommand("copy");
+      setState("Answer copied ✓", false);
+    });
+
+    // Resolves once ICE candidate gathering is complete (non-trickle signaling).
+    function waitForIce(pc) {
+      return new Promise(function (resolve) {
+        if (pc.iceGatheringState === "complete") return resolve();
+        function check() {
+          if (pc.iceGatheringState === "complete") {
+            pc.removeEventListener("icegatheringstatechange", check);
+            resolve();
+          }
+        }
+        pc.addEventListener("icegatheringstatechange", check);
+        // Safety timeout in case gathering stalls.
+        setTimeout(resolve, 4000);
+      });
+    }
+  })();
+
+  // Initial paint + focus for manual entry.
+  render();
+  focusInput();
+})();
+</script>
+</body>
+</html>
